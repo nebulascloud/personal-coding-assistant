@@ -1,18 +1,14 @@
 #!/bin/bash
 
-# Prompt for GitHub username if not already set
-if [ -z "$GITHUB_USER" ]; then
-  read -p "Enter your GitHub username: " GITHUB_USER
-fi
+# Get the GitHub username from the global git configuration
+GITHUB_USER=$(git config --get user.name)
 
-# Prompt for repository name or use current directory name
-if [ -z "$REPO_NAME" ]; then
-  REPO_NAME=$(basename "$PWD")
-  echo "Using repository name: $REPO_NAME"
-fi
+# Use the current directory name as the repository name
+REPO_NAME=$(basename "$PWD")
+echo "Using repository name: $REPO_NAME"
 
-# Construct GitHub repository URL without .git suffix
-GITHUB_REPO="https://github.com/$GITHUB_USER/$REPO_NAME"
+# Construct the GitHub repository URL
+GITHUB_REPO="https://github.com/$GITHUB_USER/$REPO_NAME.git"
 
 # Function to create a directory if it doesn't exist
 create_directory() {
@@ -152,6 +148,14 @@ yarn-error.log*
 package-lock.json
 "
 
+# Check if README.md exists, if not, create it
+if [ ! -f "README.md" ]; then
+  echo "# $REPO_NAME" > README.md
+  echo "README.md file created."
+else
+  echo "README.md already exists."
+fi
+
 echo "All files and directories have been created."
 
 # Initialize Git repository if it doesn't exist
@@ -165,20 +169,35 @@ else
   echo "Git repository already exists."
 fi
 
-# Set remote origin if not already set
-if ! git remote | grep -q "origin"; then
-  echo "Setting remote origin to $GITHUB_REPO"
-  git remote add origin "$GITHUB_REPO"
-  echo "Remote origin set to $GITHUB_REPO"
+# Check if GitHub CLI is installed and create remote repo if needed
+if command -v gh &> /dev/null; then
+  echo "GitHub CLI is installed."
+  
+  # Create repository using GitHub CLI if it doesn't exist
+  if ! gh repo view "$GITHUB_USER/$REPO_NAME" &> /dev/null; then
+    echo "Creating repository $REPO_NAME on GitHub..."
+    gh repo create "$REPO_NAME" --public --source=. --remote=origin || echo "GitHub repository created but remote not added."
+  else
+    echo "Repository $REPO_NAME already exists on GitHub."
+  fi
 else
-  echo "Remote origin already set."
+  echo "GitHub CLI not installed. Please install it to create the repository on GitHub or create it manually."
+  exit 1
 fi
 
-# Push to remote repository if it exists
+# Get current branch name (main or master)
+current_branch=$(git rev-parse --abbrev-ref HEAD)
+
+# Push to remote repository
 read -p "Do you want to push the initial commit to GitHub? (y/n): " push_response
 if [ "$push_response" = "y" ]; then
-  git push -u origin master
-  echo "Code pushed to GitHub."
+  # Attempt to push code
+  echo "Pushing code to GitHub..."
+  if git push -u origin "$current_branch"; then
+    echo "Code successfully pushed to GitHub."
+  else
+    echo "Failed to push code to GitHub. Please ensure the remote repository exists."
+  fi
 else
   echo "Skipping push to GitHub."
 fi
