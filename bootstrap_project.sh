@@ -84,50 +84,55 @@ app.on('window-all-closed', () => {
 });
 "
 
-# Create src/index.js
-create_file "src/index.js" \
-"import React from 'react';
-import ReactDOM from 'react-dom';
-import App from './App';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
-
-const darkTheme = createTheme({
-  palette: {
-    mode: 'dark',
-  },
-});
-
-ReactDOM.render(
-  <ThemeProvider theme={darkTheme}>
-    <App />
-  </ThemeProvider>,
-  document.getElementById('root')
-);
-"
-
-# Create src/App.js
+# Create src/App.js with "Hello World" code
 create_file "src/App.js" \
 "import React from 'react';
-import { Container, Box, Typography } from '@mui/material';
-import FileExplorer from './components/FileExplorer';
-import Chat from './components/Chat';
+import './App.css';
 
 function App() {
   return (
-    <Container maxWidth=\"lg\">
-      <Box sx={{ my: 4 }}>
-        <Typography variant=\"h4\" align=\"center\" gutterBottom>
-          Personal Coding Assistant
-        </Typography>
-        <FileExplorer />
-        <Chat />
-      </Box>
-    </Container>
+    <div className=\"App\">
+      <h1>Hello World!</h1>
+      <p>This is a simple React application running inside a Docker container.</p>
+    </div>
   );
 }
 
 export default App;
 "
+
+# Create src/App.css with dark-themed styles
+create_file "src/App.css" \
+"/* src/App.css */
+.App {
+  text-align: center;
+  margin-top: 50px;
+  font-family: Arial, sans-serif;
+  background-color: #121212;
+  color: #ffffff;
+  min-height: 100vh;
+}
+
+h1 {
+  color: #bb86fc;
+}
+
+p {
+  color: #ffffff;
+}
+"
+
+# Create src/index.js
+create_file "src/index.js" \
+"import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+
+const container = document.getElementById('root');
+const root = ReactDOM.createRoot(container);
+root.render(<App />);
+"
+echo "Created src/index.js with React 18 syntax."
 
 # Create .env file
 create_file ".env" \
@@ -148,12 +153,63 @@ yarn-error.log*
 package-lock.json
 "
 
-# Check if README.md exists, if not, create it
+# Create a README.md file
 if [ ! -f "README.md" ]; then
   echo "# $REPO_NAME" > README.md
   echo "README.md file created."
 else
   echo "README.md already exists."
+fi
+
+# Create Dockerfile
+if [ ! -f "Dockerfile" ]; then
+  cat <<EOL > Dockerfile
+# Dockerfile
+
+# Stage 1: Build the React app
+FROM node:16-alpine AS build
+
+WORKDIR /app
+
+COPY package*.json ./
+
+RUN npm install
+
+COPY . .
+
+RUN npm run build
+
+# Stage 2: Serve the React app with Nginx
+FROM nginx:stable-alpine
+
+COPY --from=build /app/build /usr/share/nginx/html
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
+EOL
+  echo "Dockerfile created."
+else
+  echo "Dockerfile already exists."
+fi
+
+# Create docker-compose.yml
+if [ ! -f "docker-compose.yml" ]; then
+  cat <<EOL > docker-compose.yml
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    container_name: personal-coding-assistant
+EOL
+  echo "docker-compose.yml file created."
+else
+  echo "docker-compose.yml already exists."
 fi
 
 echo "All files and directories have been created."
@@ -172,7 +228,7 @@ fi
 # Check if GitHub CLI is installed and create remote repo if needed
 if command -v gh &> /dev/null; then
   echo "GitHub CLI is installed."
-  
+
   # Create repository using GitHub CLI if it doesn't exist
   if ! gh repo view "$GITHUB_USER/$REPO_NAME" &> /dev/null; then
     echo "Creating repository $REPO_NAME on GitHub..."
@@ -183,6 +239,15 @@ if command -v gh &> /dev/null; then
 else
   echo "GitHub CLI not installed. Please install it to create the repository on GitHub or create it manually."
   exit 1
+fi
+
+# Explicitly add the remote origin in case GitHub CLI didn't
+if ! git remote | grep -q "origin"; then
+  echo "Adding remote origin manually..."
+  git remote add origin "$GITHUB_REPO"
+  echo "Remote origin set to $GITHUB_REPO"
+else
+  echo "Remote origin already set."
 fi
 
 # Get current branch name (main or master)
